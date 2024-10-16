@@ -113,7 +113,9 @@ class PretrainedCROMA(nn.Module):
 
 def get_2dalibi(num_heads, num_patches):
     # inspired by: https://github.com/ofirpress/attention_with_linear_biases
-    points = list(itertools.product(range(int(math.sqrt(num_patches))), range(int(math.sqrt(num_patches)))))
+    side_length = int(math.sqrt(num_patches))
+    points = list(itertools.product(range(side_length), range(side_length)))
+    points = torch.tensor(points, dtype=torch.float32)
 
     def get_slopes(n):
         def get_slopes_power_of_2(n):
@@ -125,16 +127,16 @@ def get_2dalibi(num_heads, num_patches):
             return get_slopes_power_of_2(n)
         else:
             closest_power_of_2 = 2 ** math.floor(math.log2(n))
-            return get_slopes_power_of_2(closest_power_of_2) + get_slopes(2 * closest_power_of_2)[0::2][
-                                                               :n - closest_power_of_2]
+            return get_slopes_power_of_2(closest_power_of_2) + get_slopes(2 * closest_power_of_2)[0::2][:n - closest_power_of_2]
 
-    slopes = torch.Tensor(get_slopes(num_heads)).unsqueeze(1)
-    idxs = []
-    for p1 in points:
-        for p2 in points:
-            dist = math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
-            idxs.append(dist * slopes * -1)
-    all_bias = torch.cat(idxs, dim=1)
+    slopes = torch.Tensor(get_slopes(num_heads)).unsqueeze(1).unsqueeze(2).unsqueeze(3)
+
+    # Use broadcasting instead of looping
+    p1 = points.unsqueeze(0)
+    p2 = points.unsqueeze(1)
+    dist = torch.cdist(p1, p2)
+
+    all_bias = dist.unsqueeze(0).unsqueeze(0) * slopes * -1
     return all_bias.view(1, num_heads, num_patches, num_patches)
 
 
