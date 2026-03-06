@@ -1,0 +1,86 @@
+name: Update Hugging Face Downloads
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # every Monday at 00:00 UTC
+  workflow_dispatch:  # allow manual trigger
+
+jobs:
+  update-downloads:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          ref: webpage
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Fetch monthly downloads
+        run: |
+          python <<EOF
+          import requests, json
+          
+          url = "https://huggingface.co/api/models/ibm-esa-geospatial/TerraMind-1.0-base?expand[]=downloads"
+          count = requests.get(url, timeout=10).json().get("downloads", 0)
+          
+          badge = {
+              "schemaVersion": 1,
+              "label": "Downloads (TM-B)",
+              "message": f"{round(count / 1000, 1)}k/month",
+              "color": "FFD21E"  # HF color
+          }
+
+          with open("assets/hf_monthly_downloads.json", "w") as f:
+              json.dump(badge, f, indent=2)
+          EOF
+
+      - name: Fetch total downloads of all models
+        run: |
+          python <<EOF
+          import requests, json
+
+          models = [
+              "TerraMind-1.0-base",
+              "TerraMind-1.0-large",
+              "TerraMind-1.0-Tokenizer-NDVI",
+              "TerraMind-1.0-Tokenizer-DEM",
+              "TerraMind-1.0-Tokenizer-LULC",
+              "TerraMind-1.0-Tokenizer-S1GRD",
+              "TerraMind-1.0-Tokenizer-S1RTC",
+              "TerraMind-1.0-Tokenizer-S2L2A"
+          ]
+
+          org = "ibm-esa-geospatial"
+          total = 0
+
+          for model in models:
+              url = f"https://huggingface.co/api/models/{org}/{model}?expand[]=downloadsAllTime"
+              try:
+                  count = requests.get(url, timeout=10).json().get("downloadsAllTime", 0)
+                  total += count
+              except Exception as e:
+                  print(f"Failed to fetch {model}: {e}")
+
+          badge = {
+              "schemaVersion": 1,
+              "label": "Total downloads (all models)",
+              "message": f"{round(total / 1000, 1)}k",
+              "color": "FFD21E"  # HF color
+          }
+
+          with open("assets/hf_total_downloads.json", "w") as f:
+              json.dump(badge, f, indent=2)
+          EOF
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add assets/hf_monthly_downloads.json
+          git add assets/hf_total_downloads.json
+          git commit -m "Update Hugging Face download stats" || echo "No changes"
+          git push origin webpage
