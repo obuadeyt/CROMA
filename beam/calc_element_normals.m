@@ -1,0 +1,15 @@
+function [element_normals] = calc_element_normals(array,el_in_deg,az_in_deg)
+
+N = size(array.positions, 2);   
+element_normals = zeros(3, N);
+    for i = 1:N
+        tilt_el = deg2rad(el_in_deg); % tilt in elevation
+        tilt_az = deg2rad(az_in_deg); % tilt in azimuth
+        element_normals(:, i) = [
+        cos(tilt_el)*cos(tilt_az);
+        cos(tilt_el)*sin(tilt_az);
+        sin(tilt_el)
+        ];
+    end
+
+end
